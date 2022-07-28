@@ -1,63 +1,66 @@
+const webSocketsServerPort = 8000;
+const webSocketServer = require('websocket').server;
+const http = require('http');
 const mongo = require('mongodb').MongoClient;
-const client = require('socket.io').listen(4000).sockets;
 
-// Connect to mongo
-mongo.connect('mongodb://127.0.0.1/mongochat', function(err, db){
-    if(err){
-        throw err;
-    }
 
-    console.log('MongoDB connected...');
+// Spinning the http server and the websocket server.
+const server = http.createServer();
+server.listen(webSocketsServerPort);
+console.log('listening on port 8000');
 
-    // Connect to Socket.io
-    client.on('connection', function(socket){
-        let chat = db.collection('chats');
 
-        // Create function to send status
-        sendStatus = function(s){
-            socket.emit('status', s);
+const wsServer = new webSocketServer({
+    httpServer: server
+});
+
+const clients = {};
+
+// This code generates unique userid for everyuser.
+const getUniqueID = () => {
+    const s4 = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
+    return s4() + s4() + '-' + s4();
+};
+
+wsServer.on('request', function (request) {
+    var userID = getUniqueID();
+    console.log((new Date()) + ' Recieved a new connection from origin ' + request.origin + '.');
+    // You can rewrite this part of the code to accept only the requests from allowed origin
+    const connection = request.accept(null, request.origin);
+    clients[userID] = connection;
+    mongo.connect('mongodb://127.0.0.1:27017', function (err, db) {
+        if (err) {
+            throw err;
         }
+        const dbo = db.db("chatroom");
+        for (key in clients) {
+            dbo.collection('chatconv').find().toArray(function (err, result) {
+                if (err) throw err;
+                clients[key].send(JSON.stringify(result));
+            });
+        }
+        connection.on('message', function (message) {
+            if (message.type === 'utf8') {
+                const messageBody =  JSON.parse(message['utf8Data'])
 
-        // Get chats from mongo collection
-        chat.find().limit(100).sort({_id:1}).toArray(function(err, res){
-            if(err){
-                throw err;
-            }
-
-            // Emit the messages
-            socket.emit('output', res);
-        });
-
-        // Handle input events
-        socket.on('input', function(data){
-            let name = data.name;
-            let message = data.message;
-
-            // Check for name and message
-            if(name == '' || message == ''){
-                // Send error status
-                sendStatus('Please enter a name and message');
-            } else {
-                // Insert message
-                chat.insert({name: name, message: message}, function(){
-                    client.emit('output', [data]);
-
-                    // Send status object
-                    sendStatus({
-                        message: 'Message sent',
-                        clear: true
-                    });
+                const instance = {
+                    name: messageBody.name,
+                    message: messageBody.message,
+                    timeStamp:new Date()
+                }
+                console.log(instance)
+                dbo.collection('chatconv').insertOne(instance, function(error,result){
+                    if (error)
+                        throw  error
+                    // broadcasting message to all connected clients
+                });
+                dbo.collection('chatconv').find().toArray(function (err, result) {
+                    if (err) throw err;
+                    for (key in clients) {
+                        clients[key].send(JSON.stringify(result));
+                    }
                 });
             }
-        });
-
-        // Handle clear
-        socket.on('clear', function(data){
-            // Remove all chats from collection
-            chat.remove({}, function(){
-                // Emit cleared
-                socket.emit('cleared');
-            });
-        });
-    });
+        })
+    })
 });

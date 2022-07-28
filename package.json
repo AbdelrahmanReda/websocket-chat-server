@@ -4,12 +4,14 @@
   "description": "Simple chat app using sockets",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "supervisor server.js"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "mongodb": "^2.2.30",
-    "socket.io": "^2.0.3"
+    "express": "^4.18.1",
+    "mongodb": "^4.8.1",
+    "socket.io": "^2.5.0",
+    "websocket": "^1.0.34"
   }
 }

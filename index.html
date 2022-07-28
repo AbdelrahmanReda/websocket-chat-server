@@ -64,15 +64,15 @@
             }
 
             // Connect to socket.io
-            var socket = io.connect('http://127.0.0.1:4000');
+            var socket = io.connect('http://127.0.0.1:4001');
 
             // Check for connection
             if(socket !== undefined){
                 console.log('Connected to socket...');
 
                 // Handle Output
-                socket.on('output', function(data){
-                    //console.log(data);
+                socket.on('connection', function(data){
+                    console.log(data);
                     if(data.length){
                         for(var x = 0;x < data.length;x++){
                             // Build out message div
